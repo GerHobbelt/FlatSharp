@@ -10,10 +10,11 @@ configuration:
 branches:
   only:
   - master
+  - release
 
 environment:
   AppVeyorBuild: true
-  VersionMajor: '4.2.2'
+  VersionMajor: '4.2.3'
   
 version: '$(VersionMajor).{build}'
 
