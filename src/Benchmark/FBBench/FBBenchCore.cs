@@ -853,7 +853,7 @@ namespace Benchmark.FBBench
         [FlatBufferItem(9)]
         public double J { get; set; }
 
-        [FlatBufferItem(10)]
+        [FlatBufferItem(10, ForceWrite = true)]
         public bool K { get; set; }
     }
 

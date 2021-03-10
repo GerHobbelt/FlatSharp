@@ -346,17 +346,6 @@ namespace FlatSharp.TypeModel
             int maxIndex = this.MaxIndex;
             int maxInlineSize = this.NonPaddedMaxTableInlineSize;
 
-            // Start by asking for the worst-case number of bytes from the serializationcontext.
-            string methodStart =
-$@"
-                int tableStart = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateSpace)}({maxInlineSize}, sizeof(int));
-                {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}({context.SpanVariableName}, {context.OffsetVariableName}, tableStart, {context.SerializationContextVariableName});
-                int currentOffset = tableStart + sizeof(int); // skip past vtable soffset_t.
-
-                int vtableLength = 4;
-                Span<byte> vtable = stackalloc byte[{4 + 2 * (maxIndex + 1)}];
-";
-
             List<string> getters = new();
             List<string> prepareBlocks = new();
             List<string> writeBlocks = new();
@@ -368,6 +357,8 @@ $@"
                 PhysicalLayoutElement layout, 
                 TableMemberModel model)> items = new();
 
+            int maxForceWriteIndex = -1;
+
             foreach (var item in this.IndexToMemberMap)
             {
                 var index = item.Key;
@@ -376,6 +367,11 @@ $@"
                 if (memberModel.IsDeprecated)
                 {
                     continue;
+                }
+
+                if (memberModel.ForceWrite)
+                {
+                    maxForceWriteIndex = Math.Max(maxForceWriteIndex, index);
                 }
 
                 string valueName = $"index{index}Value";
@@ -417,6 +413,7 @@ $@"
                 prepareBlocks.Add(this.GetPrepareSerializeBlock(
                     t.vtableIndex, 
                     t.modelIndex, 
+                    maxForceWriteIndex,
                     t.valueVariableName, 
                     t.layout, 
                     t.model, 
@@ -432,6 +429,17 @@ $@"
                     ");
                 }
             }
+
+            // Start by asking for the worst-case number of bytes from the serializationcontext.
+            string methodStart =
+$@"
+                int tableStart = {context.SerializationContextVariableName}.{nameof(SerializationContext.AllocateSpace)}({maxInlineSize}, sizeof(int));
+                {context.SpanWriterVariableName}.{nameof(SpanWriterExtensions.WriteUOffset)}({context.SpanVariableName}, {context.OffsetVariableName}, tableStart, {context.SerializationContextVariableName});
+                int currentOffset = tableStart + sizeof(int); // skip past vtable soffset_t.
+
+                int vtableLength = {4 + 2 * (maxForceWriteIndex + 1)};
+                Span<byte> vtable = stackalloc byte[{4 + 2 * (maxIndex + 1)}];
+";
 
             List<string> body = new();
             body.Add(methodStart);
@@ -461,6 +469,7 @@ $@"
         private string GetPrepareSerializeBlock(
             int index,
             int i,
+            int maxForceWriteIndex,
             string valueVariableName,
             PhysicalLayoutElement layout,
             TableMemberModel memberModel,
@@ -482,7 +491,9 @@ $@"
                 currentOffset += {layout.InlineSize};";
 
             string setVtableBlock = string.Empty;
-            if (i == memberModel.ItemTypeModel.PhysicalLayout.Length - 1)
+
+            if (index > maxForceWriteIndex &&
+                i == memberModel.ItemTypeModel.PhysicalLayout.Length - 1)
             {
                 setVtableBlock = $@"
                     if ({vTableLength} > vtableLength)

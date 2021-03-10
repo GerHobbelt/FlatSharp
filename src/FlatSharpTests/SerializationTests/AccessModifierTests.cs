@@ -69,9 +69,15 @@ namespace FlatSharpTests
             [FlatBufferItem(5)]
             public virtual int PublicGetterProtectedInternalInit { get; protected internal init; }
 
-            [FlatBufferItem(6)]
+            [FlatBufferItem(7)]
             public virtual int PublicGetterProtectedInit { get; protected init; }
 #endif
+
+            [FlatBufferItem(6, ForceWrite = false)]
+            public virtual bool Foo { get; set; }
+
+            [FlatBufferItem(8, ForceWrite = false)]
+            public virtual bool Foo2 { get; set; }
         }
 
         [FlatBufferStruct]
